@@ -22,6 +22,7 @@
 namespace OCA\Files_Sharing\Controller;
 
 use OC\OCS\Result;
+use OC\Share20\ExtraPermission;
 use OCP\AppFramework\OCSController;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
@@ -126,6 +127,46 @@ class Share20OcsController extends OCSController {
 	}
 
 	/**
+	 * @param IShare $share
+	 * @param string[][] $formattedShareExtraPermissions
+	 * @return IShare modified share
+	 */
+	private function extractExtraPermissions(IShare $share, $formattedShareExtraPermissions) {
+		$shareExtraPermissions = [];
+		foreach($formattedShareExtraPermissions as $formattedPermission) {
+			$permissionEnabled = json_decode($formattedPermission["permissionEnabled"]);
+			if ($permissionEnabled === true) {
+				$permission = new ExtraPermission();
+				$permission->setId($formattedPermission["permissionName"])
+					->setApp($formattedPermission["appId"]);
+				$shareExtraPermissions[] = $permission;
+			}
+		}
+
+		$share->setExtraPermissions($shareExtraPermissions);
+		return $share;
+	}
+
+	/**
+	 * Format extra permissions by merging IShare extra permissions
+	 * with extra permissions registered with \OCP\Share\IManager
+	 *
+	 * @param IShare $share
+	 * @return array
+	 */
+	private function formatExtraPermissions(IShare $share) {
+		$shareExtraPermissions = $share->getExtraPermissions();
+		$formattedShareExtraPermissions = [];
+		foreach($shareExtraPermissions as $perm) {
+			$permission["app"] = $perm->getApp();
+			$permission["id"] = $perm->getId();
+			$formattedShareExtraPermissions[] = $permission;
+		}
+
+		return json_encode($formattedShareExtraPermissions);
+	}
+
+	/**
 	 * Convert an IShare to an array for OCS output
 	 *
 	 * @param IShare $share
@@ -143,6 +184,7 @@ class Share20OcsController extends OCSController {
 			'uid_owner' => $share->getSharedBy(),
 			'displayname_owner' => $sharedBy !== null ? $sharedBy->getDisplayName() : $share->getSharedBy(),
 			'permissions' => $share->getPermissions(),
+			'extra_permissions' => $this->formatExtraPermissions($share),
 			'stime' => $share->getShareTime() ? $share->getShareTime()->getTimestamp() : null,
 			'parent' => null,
 			'expiration' => null,
@@ -835,6 +877,9 @@ class Share20OcsController extends OCSController {
 		if ($share->getPermissions() === 0) {
 			return new Result(null, 400, $this->l->t('Cannot remove all permissions'));
 		}
+
+		$formattedExtraPermissions = $this->request->getParam('extraPermissions', []);
+		$share = $this->extractExtraPermissions($share, $formattedExtraPermissions);
 
 		try {
 			$share = $this->shareManager->updateShare($share);

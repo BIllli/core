@@ -160,12 +160,15 @@ class MountProvider implements IMountProvider {
 			$superShare = $this->shareManager->newShare();
 
 			// compute super share based on first entry of the group
-			$superShare->setId($shares[0]->getId())
-				->setShareOwner($shares[0]->getShareOwner())
-				->setNodeId($shares[0]->getNodeId())
-				->setTarget($shares[0]->getTarget());
+			$baseShare = $shares[0];
+			$superShare->setId($baseShare->getId())
+				->setShareOwner($baseShare->getShareOwner())
+				->setNodeId($baseShare->getNodeId())
+				->setTarget($baseShare->getTarget());
 
 			// use most permissive permissions
+			// this covers the case where there are multiple shares for the same file
+			// e.g. from different groups and different permissions
 			$permissions = 0;
 			foreach ($shares as $share) {
 				$permissions |= $share->getPermissions();
@@ -191,8 +194,11 @@ class MountProvider implements IMountProvider {
 					}
 				}
 			}
-
 			$superShare->setPermissions($permissions);
+
+			// FIXME: might need to add all extra permissions for all grouped shares, for now it is "random"
+			// super share gets extra permission of first entry
+			$superShare->setExtraPermissions($baseShare->getExtraPermissions());
 
 			$result[] = [$superShare, $shares];
 		}

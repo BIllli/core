@@ -185,6 +185,22 @@ interface IShare {
 	public function getPermissions();
 
 	/**
+	 * Set extra permissions
+	 *
+	 * @param IExtraPermission[] $permissions
+	 * @since 10.2.0
+	 * @return \OCP\Share\IShare The modified object
+	 */
+	public function setExtraPermissions($permissions);
+	/**
+	 * Get extra permissions
+	 *
+	 * @return IExtraPermission[]
+	 * @since 10.2.0
+	 */
+	public function getExtraPermissions();
+
+	/**
 	 * Set the expiration date
 	 *
 	 * @param \DateTime $expireDate

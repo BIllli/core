@@ -38,6 +38,7 @@
 	 * @typedef {object} OC.Share.Types.ShareInfo
 	 * @property {number} share_type
 	 * @property {number} permissions
+	 * @property {string} extra_permissions
 	 * @property {number} file_source optional
 	 * @property {number} item_source
 	 * @property {string} token
@@ -54,6 +55,15 @@
 	 * @property {OC.Share.Types.Reshare} reshare
 	 * @property {OC.Share.Types.ShareInfo[]} shares
 	 * @property {OC.Share.Types.LinkShareInfo|undefined} linkShare
+	 */
+
+	/**
+	 * @typedef {object} OC.Share.Types.ShareExtraPermission
+	 * @property {string} permissionName
+	 * @property {bool} permissionEnabled
+	 * @property {string} permissionApp
+	 * @property {string} permissionLabel
+	 * @property {string} permissionNotification
 	 */
 
 	/**
@@ -84,6 +94,8 @@
 
 		_linkSharesCollection: null,
 
+		_availableExtraPermissions: {},
+
 		initialize: function(attributes, options) {
 			if(!_.isUndefined(options.configModel)) {
 				this.configModel = options.configModel;
@@ -96,6 +108,7 @@
 			this._linkSharesCollection = new OC.Share.SharesCollection();
 
 			_.bindAll(this, 'addShare');
+			OC.Plugins.attach('OC.Share.ShareItemModel', this);
 		},
 
 		defaults: {
@@ -752,7 +765,75 @@
 				result.push(OC.Share.SHARE_TYPE_LINK);
 			}
 			return _.uniq(result);
+		},
+
+		/**
+		 * @param shareIndex
+		 * @returns OC.Share.Types.ShareExtraPermission[]
+		 */
+		getShareExtraPermissions: function(shareIndex) {
+			/** @type OC.Share.Types.ShareInfo **/
+			var share = this.get('shares')[shareIndex];
+			if(!_.isObject(share)) {
+				throw "Unknown Share";
+			}
+
+			if (_.isUndefined(share.extra_permissions)) {
+				return [];
+			}
+
+			var enabledExtraPermissions = JSON.parse(share.extra_permissions);
+
+			// Mark available permissions as enabled if share has extra permission
+			var shareExtraPermissions = [];
+			for (var appId in this._availableExtraPermissions) {
+				if (!this._availableExtraPermissions.hasOwnProperty(appId)) {
+					continue;
+				}
+				for (var permissionId in this._availableExtraPermissions[appId]) {
+					if (!this._availableExtraPermissions[appId].hasOwnProperty(permissionId)) {
+						continue;
+					}
+					var enabled = false;
+					enabledExtraPermissions.map(function(enabledPermission) {
+						if (enabledPermission.app === appId && enabledPermission.id === permissionId) {
+							enabled = true;
+						}
+					});
+					var permissionMeta = this._availableExtraPermissions[appId][permissionId];
+
+					var shareExtraPermission = {
+						permissionApp: appId,
+						permissionName: permissionId,
+						permissionLabel: permissionMeta.label,
+						permissionNotification: permissionMeta.description,
+						permissionEnabled: enabled
+					};
+					shareExtraPermissions.push(shareExtraPermission);
+				}
+			}
+
+			return shareExtraPermissions;
+		},
+
+		/**
+		 * Apps can register their extra share permissions
+		 *
+		 * @param {string} $appId
+		 * @param {string} $permissionName
+		 * @param {string} $permissionLabel
+		 * @param {string} $permissionDescription
+		 */
+		registerExtraSharePermission: function($appId, $permissionName, $permissionLabel, $permissionDescription) {
+			if (!this._availableExtraPermissions.hasOwnProperty($appId)) {
+				this._availableExtraPermissions[$appId] = {};
+			}
+			this._availableExtraPermissions[$appId][$permissionName] = {
+				label: $permissionLabel,
+				description: $permissionDescription
+			};
 		}
+
 	});
 
 	OC.Share.ShareItemModel = ShareItemModel;
